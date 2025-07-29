@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - master
+      - main  # fixed: your branch is main, not master
 
 jobs:
   deploy:
@@ -20,7 +20,7 @@ jobs:
 
     - name: Copy docker-compose file to EC2
       run: |
-        scp -o StrictHostKeyChecking=no docker-compose.yml ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/docker-compose.yml
+        scp -o StrictHostKeyChecking=no ./docker-compose.yml ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/docker-compose.yml
 
     - name: Deploy on EC2 via SSH
       run: |
