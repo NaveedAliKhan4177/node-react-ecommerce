@@ -1,37 +1,45 @@
-name: Deploy to EC2
+name: Deploy Node + React App to EC2
 
 on:
   push:
     branches:
-      - main  # trigger on push to main branch
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_KEY }}
 
-    - name: Setup SSH
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-        ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+      - name: Deploy to EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            # Clone or update repo
+            rm -rf node-react-ecommerce || true
+            git clone https://github.com/NaveedAliKhan4177/node-react-ecommerce.git
+            cd node-react-ecommerce
 
-    - name: Copy docker-compose file to EC2
-      run: |
-        scp -o StrictHostKeyChecking=no ./docker-compose.yml ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/docker-compose.yml
+            # Install & start backend
+            cd backend
+            npm install
+            pm2 delete backend || true
+            pm2 start index.js --name backend
+            cd ..
 
-    - name: Deploy on EC2 via SSH
-      run: |
-        ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-          cd /home/ubuntu
-          docker compose pull
-          docker compose up -d --remove-orphans
-        EOF
+            # Install & build frontend
+            cd frontend
+            npm install
+            npm run build
+
+            # Copy build to Nginx
+            sudo rm -rf /var/www/html/*
+            sudo cp -r dist/* /var/www/html/
+            sudo systemctl restart nginx
+          EOF
