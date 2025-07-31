@@ -36,22 +36,24 @@ jobs:
             cd node-react-ecommerce && git pull origin main && cd ..
           fi
 
-          # Install PM2 globally (only once)
+          # Install PM2 globally (if not installed)
           sudo npm install -g pm2
 
           # === FRONTEND ===
-          cd ~/node-react-ecommerce/frontend
+          cd /home/ubuntu/node-react-ecommerce/frontend
           npm install
           npm run build
           sudo rm -rf /var/www/html/*
           sudo cp -r build/* /var/www/html/
 
           # === BACKEND ===
-          cd ~/node-react-ecommerce/backend
+          cd /home/ubuntu/node-react-ecommerce/backend
           npm install
+          chmod +x server.mjs
 
-          # Kill old app and restart
+          # Kill old app and restart with PM2 using .mjs format
           pm2 delete backend-app || true
-          pm2 start server.js --name backend-app
+          pm2 start server.mjs --name backend-app --interpreter node
           pm2 save
-          pm2 startup | grep sudo |
+          pm2 startup | grep sudo | bash
+        EOF
