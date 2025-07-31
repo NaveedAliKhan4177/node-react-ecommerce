@@ -1,4 +1,4 @@
-name: Deploy Node + React App to EC2
+name: Deploy Fullstack App to EC2
 
 on:
   push:
@@ -10,36 +10,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.EC2_KEY }}
+    - name: Setup SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_KEY }}" > ~/.ssh/cicd_github
+        chmod 600 ~/.ssh/cicd_github
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy to EC2
-        run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Clone or update repo
-            rm -rf node-react-ecommerce || true
+    - name: Deploy and Setup on EC2
+      run: |
+        ssh -i ~/.ssh/cicd_github ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          # Update system
+          sudo apt update
+
+          # Install required packages
+          sudo apt install -y nginx nodejs npm git
+
+          # Clone or update repo
+          if [ ! -d node-react-ecommerce ]; then
             git clone https://github.com/NaveedAliKhan4177/node-react-ecommerce.git
-            cd node-react-ecommerce
+          else
+            cd node-react-ecommerce && git pull origin main && cd ..
+          fi
 
-            # Install & start backend
-            cd backend
-            npm install
-            pm2 delete backend || true
-            pm2 start index.js --name backend
-            cd ..
+          # Install PM2 globally (only once)
+          sudo npm install -g pm2
 
-            # Install & build frontend
-            cd frontend
-            npm install
-            npm run build
+          # === FRONTEND ===
+          cd ~/node-react-ecommerce/frontend
+          npm install
+          npm run build
+          sudo rm -rf /var/www/html/*
+          sudo cp -r build/* /var/www/html/
 
-            # Copy build to Nginx
-            sudo rm -rf /var/www/html/*
-            sudo cp -r dist/* /var/www/html/
-            sudo systemctl restart nginx
-          EOF
+          # === BACKEND ===
+          cd ~/node-react-ecommerce/backend
+          npm install
+
+          # Kill old app and restart
+          pm2 delete backend-app || true
+          pm2 start server.js --name backend-app
+          pm2 save
+          pm2 startup | grep sudo |
