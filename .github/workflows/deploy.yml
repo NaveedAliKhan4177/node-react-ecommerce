@@ -1,4 +1,4 @@
-name: Deploy Fullstack App to EC2
+name: Deploy to EC2
 
 on:
   push:
@@ -13,51 +13,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Setup SSH Agent
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-        ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
-
-    - name: Deploy and Setup on EC2
+    - name: Set up SSH key
       run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          # Update system
-          sudo apt update
+        echo "${{ secrets.EC2_SSH_KEY }}" > ec2_key.pem
+        chmod 600 ec2_key.pem
 
-          # Install required packages
-          sudo apt install -y nginx nodejs npm git
+    - name: Copy docker-compose.yml to EC2
+      run: |
+        scp -o StrictHostKeyChecking=no -i ec2_key.pem ./docker-compose.yml ubuntu@${{ secrets.EC2_PUBLIC_IP }}:/home/ubuntu/docker-compose.yml
 
-          # Clone or update repo
-          if [ ! -d node-react-ecommerce ]; then
-            git clone https://github.com/NaveedAliKhan4177/node-react-ecommerce.git
-          else
-            cd node-react-ecommerce && git pull origin main && cd ..
-          fi
-
-          # Install PM2 globally (if not installed)
-          sudo npm install -g pm2
-
-          # === FRONTEND ===
-          cd /home/ubuntu/node-react-ecommerce/frontend
-          npm install
-          npm run build
-          sudo rm -rf /var/www/html/*
-          sudo cp -r build/* /var/www/html/
-
-          # === BACKEND ===
-          cd /home/ubuntu/node-react-ecommerce/backend
-          npm install
-          chmod +x server.mjs
-
-          # Kill old app and restart with PM2 using .mjs format
-          pm2 delete backend-app || true
-          pm2 start server.mjs --name backend-app --interpreter node
-          pm2 save
-          pm2 startup | grep sudo | bash
+    - name: Run Docker Compose on EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          cd /home/ubuntu
+          sudo docker-compose down || true
+          sudo docker-compose up -d --build
         EOF
