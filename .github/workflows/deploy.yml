@@ -20,7 +20,8 @@ jobs:
 
     - name: Copy docker-compose.yml to EC2
       run: |
-        scp -o StrictHostKeyChecking=no -i ec2_key.pem ./docker-compose.yml ubuntu@${{ secrets.EC2_PUBLIC_IP }}:/home/ubuntu/docker-compose.yml
+        scp -o StrictHostKeyChecking=no ./deploy/docker-compose.yml ubuntu@...
+${{ secrets.EC2_PUBLIC_IP }}:/home/ubuntu/docker-compose.yml
 
     - name: Run Docker Compose on EC2
       run: |
